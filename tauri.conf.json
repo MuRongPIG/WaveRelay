@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WaveRelay",
+  "version": "0.1.0",
+  "identifier": "app.waverelay.desktop",
+  "build": {
+    "frontendDist": "src/ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "WaveRelay",
+        "width": 360,
+        "height": 640,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "shadow": false,
+        "preventOverflow": true,
+        "backgroundColor": "#ffffff"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["src/icons/icon.ico", "src/icons/icon.png"]
+  }
+}

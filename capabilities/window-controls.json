@@ -1,0 +1,10 @@
+{
+  "identifier": "window-controls",
+  "description": "Allows the main title bar to move and control its window.",
+  "windows": ["main"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-close"
+  ]
+}

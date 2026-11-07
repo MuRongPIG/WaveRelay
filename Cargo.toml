@@ -1,0 +1,21 @@
+[package]
+name = "waverelay"
+version = "0.1.0"
+edition = "2024"
+description = "Relay Android audio to a desktop over ADB"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+cpal = "0.15.3"
+ctrlc = "3"
+opus-decoder = "0.1.1"
+ringbuf = "0.4.8"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = ["custom-protocol"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Console"] }
+
+[build-dependencies]
+tauri-build = "2"

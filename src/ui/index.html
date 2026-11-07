@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WaveRelay</title>
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="titlebar">
+    <div id="window-drag" class="titlebar-drag">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M5 17h5l3-8 5 14 4-10 2 4h3"/></svg>
+        <h1>WaveRelay</h1>
+      </div>
+      <div class="badge" id="badge" data-phase="idle" role="status"><i></i><span id="state-label">待连接</span></div>
+    </div>
+    <div class="window-controls" role="group" aria-label="窗口和外观控制">
+      <button id="theme-toggle" type="button" title="切换明暗主题" aria-label="暗黑模式" aria-pressed="false">
+        <svg class="icon-moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.8 10A6 6 0 0 1 6 2.2 6 6 0 1 0 13.8 10Z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1v2m0 10v2M1 8h2m10 0h2M3 3l1.4 1.4m7.2 7.2L13 13m0-10-1.4 1.4m-7.2 7.2L3 13"/></svg>
+      </button>
+      <button id="window-minimize" type="button" title="最小化" aria-label="最小化">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg>
+      </button>
+      <button id="window-close" type="button" title="关闭" aria-label="关闭">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg>
+      </button>
+    </div>
+  </header>
+  <main class="shell">
+
+    <div class="stack">
+      <section class="panel" aria-labelledby="device-heading">
+        <div class="panel-head">
+          <div><p class="eyebrow">01 / 音频来源</p><h2 id="device-heading">Android 设备</h2></div>
+          <button id="refresh" type="button" class="secondary">刷新</button>
+        </div>
+        <fieldset class="connection-mode">
+          <legend>连接方式</legend>
+          <label><input id="mode-usb" type="radio" name="connection" value="usb" checked> USB 连接</label>
+          <label><input id="mode-network" type="radio" name="connection" value="network"> 网络连接</label>
+        </fieldset>
+
+        <div id="network" class="network" hidden>
+          <p class="muted">开启手机的「无线调试」，并让手机和电脑接入同一局域网。</p>
+          <div class="network-grid">
+            <form id="pair-form">
+              <h3>首次配对</h3>
+              <p class="muted pair-note">在手机上打开配对码弹窗。</p>
+              <label for="pair-address">配对地址</label>
+              <input id="pair-address" type="text" placeholder="IP:配对端口" required spellcheck="false">
+              <label for="pair-code">六位配对码</label>
+              <div class="form-row">
+                <input id="pair-code" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
+                <button class="secondary" type="submit">配对</button>
+              </div>
+            </form>
+            <form id="connect-form">
+              <h3>连接已配对设备</h3>
+              <label for="connect-address">连接地址</label>
+              <div class="form-row">
+                <input id="connect-address" type="text" placeholder="IP:连接端口" required spellcheck="false">
+                <button class="secondary" type="submit">连接</button>
+              </div>
+              <p class="muted">使用无线调试主页显示的地址。配对和连接端口通常不同。</p>
+            </form>
+          </div>
+          <p id="network-status" class="muted" role="status"></p>
+        </div>
+
+        <label for="device">选择设备</label>
+        <select id="device" disabled><option>正在查找设备…</option></select>
+        <p class="muted" id="device-detail" role="status">正在读取本机 ADB 设备列表。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="output-heading">
+        <div class="panel-head">
+          <div><p class="eyebrow">02 / 播放设置</p><h2 id="output-heading">电脑音频</h2></div>
+          <span class="tag">系统默认输出</span>
+        </div>
+        <label for="quality">音质</label>
+        <select id="quality" aria-describedby="quality-note">
+          <option value="pcm">无损 · PCM</option>
+          <option value="opus192">高音质 · Opus 192 kbps</option>
+          <option value="opus96">省带宽 · Opus 96 kbps</option>
+        </select>
+        <p class="muted" id="quality-note">PCM 无损，Opus 更省带宽。</p>
+        <div class="playback-sliders">
+          <div>
+            <div class="range-label"><label for="volume">音量</label><output id="volume-value" for="volume">100%</output></div>
+            <input id="volume" type="range" min="0" max="100" value="100">
+          </div>
+          <div>
+            <div class="range-label"><label for="buffer">目标缓冲</label><output id="buffer-value" for="buffer">50 ms</output></div>
+            <input id="buffer" type="range" min="20" max="250" step="10" value="50" aria-describedby="buffer-note">
+          </div>
+        </div>
+        <p class="muted" id="buffer-note">无线播放卡顿时，可尝试增大缓冲。</p>
+      </section>
+    </div>
+
+    <div id="error" class="error" role="alert" hidden></div>
+    <footer class="actions">
+      <p id="state-detail" class="muted">选择设备后开始转发。</p>
+      <button id="toggle" type="button" class="primary" disabled>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path id="toggle-icon" d="M6 4l10 6-10 6z"/></svg>
+        <span id="toggle-text">开始转发</span>
+      </button>
+    </footer>
+  </main>
+</body>
+</html>
