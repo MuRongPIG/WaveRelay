@@ -14,6 +14,10 @@ const volume = byId("volume");
 const buffer = byId("buffer");
 const toggle = byId("toggle");
 const errorBox = byId("error");
+const setupPanel = byId("setup-panel");
+const sdkConsent = byId("accept-sdk");
+const setupMessageElement = byId("setup-message");
+const setupButtons = { adb: byId("download-adb"), scrcpy: byId("download-scrcpy") };
 
 let status = { phase: "idle" };
 let devices = [];
@@ -23,6 +27,9 @@ let networkBusy = false;
 let discoveryError;
 let actionError;
 let networkMessage;
+let toolStatus;
+let setupBusy = false;
+let setupMessage;
 let volumeTimer;
 let statusRequest = 0;
 
@@ -43,11 +50,25 @@ function render() {
   if (label.textContent !== t(status.phase)) {
     label.textContent = t(status.phase);
   }
-  byId("state-detail").textContent = t(status.phase + "Detail", { serial: status.serial });
+  const missingTools = toolStatus && (!toolStatus.adb || !toolStatus.scrcpy);
+  byId("state-detail").textContent = status.phase === "idle" && missingTools
+    ? t("setupNeeded")
+    : t(status.phase + "Detail", { serial: status.serial });
   const networkText = messageText(networkMessage);
   if (networkStatus.textContent !== networkText) networkStatus.textContent = networkText;
 
-  const controlsLocked = running || acting || networkBusy;
+  const controlsLocked = running || acting || networkBusy || setupBusy;
+  for (const [component, button] of Object.entries(setupButtons)) {
+    const ready = toolStatus?.[component];
+    byId("setup-" + component + "-state").textContent =
+      t(ready == null ? "setupChecking" : ready ? "setupReady" : "setupMissing");
+    button.disabled = controlsLocked || ready !== false || (component === "adb" && !sdkConsent.checked);
+  }
+  sdkConsent.disabled = controlsLocked || toolStatus?.adb === true;
+  byId("setup-license").hidden = toolStatus?.adb === true;
+  const setupText = messageText(setupMessage);
+  if (setupMessageElement.textContent !== setupText) setupMessageElement.textContent = setupText;
+  setupMessageElement.dataset.error = String(Boolean(setupMessage?.detail));
   usb.disabled = controlsLocked;
   networkMode.disabled = controlsLocked;
   network.hidden = !networkMode.checked;
@@ -60,7 +81,7 @@ function render() {
   buffer.disabled = running || acting;
   quality.disabled = running || acting;
   toggle.disabled = acting || status.phase === "stopping" ||
-    (!running && (refreshing || networkBusy || selected?.state !== "device"));
+    (!running && (refreshing || controlsLocked || missingTools || selected?.state !== "device"));
   toggle.dataset.mode = running ? "stop" : "start";
   byId("toggle-text").textContent = status.phase === "stopping" ? t("stoppingButton") :
     t(running ? "stop" : "start");
@@ -100,6 +121,42 @@ function renderDevices(preferred = device.value) {
     ? t("deviceCount", { ready, total: visible.length })
     : t("authorizationHint");
 }
+
+async function loadSetupStatus(revealMissing = false) {
+  try {
+    toolStatus = await invoke("dependency_status");
+    if (revealMissing && (!toolStatus.adb || !toolStatus.scrcpy)) setupPanel.open = true;
+  } catch (error) {
+    setupMessage = { key: "setupCheckFailed", detail: String(error) };
+    if (revealMissing) setupPanel.open = true;
+  }
+  render();
+}
+
+async function installTool(component) {
+  const acceptSdkLicense = sdkConsent.checked;
+  if (setupBusy || active() || acting || networkBusy || (component === "adb" && !acceptSdkLicense)) return;
+
+  const name = component === "adb" ? "ADB" : "scrcpy";
+  setupBusy = true;
+  setupMessage = { key: "setupInstalling", values: { name } };
+  render();
+  try {
+    await invoke("install_dependency", { component, acceptSdkLicense });
+    setupMessage = { key: "setupSuccess", values: { name } };
+    await Promise.all([loadSetupStatus(), loadDevices()]);
+  } catch (error) {
+    setupMessage = { key: "setupFailed", detail: String(error) };
+  } finally {
+    setupBusy = false;
+    render();
+  }
+}
+
+for (const [component, button] of Object.entries(setupButtons)) {
+  button.addEventListener("click", () => installTool(component));
+}
+sdkConsent.addEventListener("change", render);
 
 async function loadDevices(preferred) {
   refreshing = true;
@@ -286,6 +343,7 @@ async function initialize() {
   } catch (error) {
     console.warn("Could not read the startup language:", error);
   }
+  void loadSetupStatus(true);
   void loadDevices();
   void poll();
 }

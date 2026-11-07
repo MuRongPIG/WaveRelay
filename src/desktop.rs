@@ -1,6 +1,4 @@
 use std::{
-    env,
-    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -9,10 +7,10 @@ use std::{
 };
 
 use crate::{
-    adb::Adb,
     language::Language,
     protocol::AudioQuality,
-    relay::{DEFAULT_SERVER, RelayOptions, run_relay},
+    relay::{RelayOptions, run_relay},
+    tools::{Component, ToolStatus, Tools},
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, PhysicalSize, State, Window, WindowEvent};
@@ -58,7 +56,7 @@ impl SessionState {
 
 struct Controller {
     session: Arc<Mutex<SessionState>>,
-    adb: Adb,
+    tools: Tools,
     language: Option<Language>,
 }
 
@@ -77,30 +75,9 @@ struct Settings {
     quality: AudioQuality,
 }
 
-fn server_file() -> PathBuf {
-    if let Some(path) = env::var_os("WAVERELAY_SERVER") {
-        return PathBuf::from(path);
-    }
-    let relative = PathBuf::from(DEFAULT_SERVER);
-    if relative.is_file() {
-        return relative;
-    }
-    if let Ok(exe) = env::current_exe()
-        && let Some(file) = exe
-            .ancestors()
-            .skip(1)
-            .take(5)
-            .map(|parent| parent.join(&relative))
-            .find(|file| file.is_file())
-    {
-        return file;
-    }
-    relative
-}
-
 #[tauri::command]
 async fn list_devices(controller: State<'_, Controller>) -> Result<Vec<Device>, String> {
-    let adb = controller.adb.clone();
+    let adb = controller.tools.adb();
     tauri::async_runtime::spawn_blocking(move || {
         adb.devices()
             .map(|devices| {
@@ -125,9 +102,34 @@ async fn wireless_device(
     language: Language,
     controller: State<'_, Controller>,
 ) -> Result<String, String> {
-    let adb = controller.adb.clone();
+    let adb = controller.tools.adb();
     tauri::async_runtime::spawn_blocking(move || {
         adb.wireless(&address, pairing_code.as_deref(), language)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn dependency_status(controller: State<'_, Controller>) -> Result<ToolStatus, String> {
+    let tools = controller.tools.clone();
+    tauri::async_runtime::spawn_blocking(move || tools.status())
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn install_dependency(
+    component: Component,
+    accept_sdk_license: bool,
+    controller: State<'_, Controller>,
+) -> Result<(), String> {
+    let tools = controller.tools.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        tools
+            .install(component, accept_sdk_license)
+            .map(|_| ())
             .map_err(|error| format!("{error:#}"))
     })
     .await
@@ -175,14 +177,14 @@ fn start_relay(
 
     let stop = Arc::new(AtomicBool::new(false));
     let volume = Arc::new(AtomicU32::new(settings.volume));
-    let adb = controller.adb.clone();
+    let adb = controller.tools.adb();
+    let server = controller.tools.server();
     let worker_stop = stop.clone();
     let worker_volume = volume.clone();
     let serial = settings.serial.clone();
     thread::Builder::new()
         .name("waverelay-audio".into())
         .spawn(move || {
-            let server = server_file();
             let options = RelayOptions {
                 serial: Some(&settings.serial),
                 server: &server,
@@ -269,18 +271,20 @@ fn fit_window_height(window: Window, height: u32) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn run(adb: Adb, language: Option<Language>) -> tauri::Result<()> {
+pub fn run(tools: Tools, language: Option<Language>) -> tauri::Result<()> {
     #[cfg(windows)]
     detach_private_console();
 
     tauri::Builder::default()
         .manage(Controller {
             session: Arc::new(Mutex::new(SessionState::default())),
-            adb,
+            tools,
             language,
         })
         .invoke_handler(tauri::generate_handler![
             gui_language,
+            dependency_status,
+            install_dependency,
             list_devices,
             wireless_device,
             relay_status,

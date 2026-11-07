@@ -32,21 +32,31 @@ WaveRelay 将 Android 手机的音频转发到电脑的默认音频设备。Andr
 
 - Windows 电脑。桌面界面使用 Microsoft Edge WebView2 Runtime。 [Tauri 系统要求](https://v2.tauri.app/start/prerequisites/#windows)
 - 运行 Android 11 或以上版本的手机，已开启 USB 调试或无线调试。
-- Android SDK Platform-Tools 中的 ADB。将 `platform-tools` 加入 `PATH`，并确认 `adb version` 可以运行。 [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
 
-### 1. 准备 WaveRelay
+### 1. 运行 WaveRelay 并配置依赖
 
-将 `waverelay.exe` 放到一个文件夹，或按下文[从源码构建](#源码构建)。在 EXE 所在目录或源码仓库根目录下载对应的 Android 服务。以下命令会校验 scrcpy v3.3.4 服务文件的 SHA-256。 [scrcpy v3.3.4 发布页](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
+打开 `waverelay.exe`。[从源码构建](#源码构建)后，可以直接运行 `target\release` 里的 EXE。展开界面中的「运行依赖」，下载缺少的组件。
+
+也可以在 EXE 所在目录按需执行安装命令。安装 ADB 和 scrcpy Android 服务前，请阅读并接受 [Android SDK 条款](https://developer.android.com/studio/terms)，然后运行以下命令。
 
 ```powershell
-$server = '.local\scrcpy-server-v3.3.4'
-$expected = '8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e'
-New-Item -ItemType Directory -Force '.local' | Out-Null
-Invoke-WebRequest -Uri 'https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4' -OutFile $server
-if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
-    throw 'scrcpy server checksum mismatch.'
-}
+.\waverelay.exe setup all --accept-android-sdk-license
 ```
+
+只安装 scrcpy Android 服务时，运行以下命令。
+
+```powershell
+.\waverelay.exe setup scrcpy
+```
+
+WaveRelay 从 Google 的 Windows Platform-Tools 37.0.1 归档获取 ADB 文件，并从 scrcpy v3.3.4 获取 Android 服务。程序按固定的 SHA-256 校验下载内容，并安装到 `%LOCALAPPDATA%\WaveRelay\tools`，供后续启动复用。 [Platform-Tools 版本说明](https://developer.android.com/tools/releases/platform-tools) · [scrcpy v3.3.4 发布页](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
+
+<details>
+<summary>手动配置</summary>
+
+把现有 Platform-Tools 目录加入 `PATH`，或通过 `--adb` 指定 `adb.exe` 的路径。将 v3.3.4 Android 服务保存为 EXE 所在目录或仓库根目录中的 `.local\scrcpy-server-v3.3.4`。文件的 SHA-256 为 `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`。 [官方 Android 服务下载](https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4)
+
+</details>
 
 ### 2. 连接并播放
 
@@ -59,7 +69,7 @@ if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
 
 ## 命令行
 
-在包含 EXE 和 `.local` 的目录中运行以下命令。如果从仓库根目录运行，将 `.\waverelay.exe` 替换为 `.\target\release\waverelay.exe`。以下网络地址仅用于示例。
+在包含 EXE 的目录中运行以下命令。如果从仓库根目录运行，将 `.\waverelay.exe` 替换为 `.\target\release\waverelay.exe`。以下网络地址仅用于示例。
 
 ```powershell
 .\waverelay.exe --help
@@ -72,22 +82,23 @@ if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
 
 - `play` 使用 PCM。多台设备在线时，用 `--serial` 指定 `devices` 显示的序列号。按 Ctrl+C 停止。
 - `--buffer-ms` 设置目标播放缓冲，单位为毫秒。实际端到端延迟还受采集、传输和输出设备影响。
-- 可用 `--adb` 或 `WAVERELAY_ADB` 指定 ADB。CLI 通过 `play --server` 指定 Android 服务文件，GUI 通过 `WAVERELAY_SERVER` 指定。
+- 可用 `--adb` 或 `WAVERELAY_ADB` 指定 ADB。WaveRelay 默认优先使用已下载的 ADB，其次查找 `PATH`。Android 服务按 `play --server`、`WAVERELAY_SERVER`、已下载副本、`.local` 的顺序查找。
 
 用 `--lang en` 或 `--lang zh-CN` 设置命令说明和应用消息的语言。命令行默认使用英文。可以通过 `WAVERELAY_LANG` 设置默认语言，或用 `gui --lang en` 指定本次 GUI 的初始语言。ADB 和操作系统的诊断信息可能保留原文。
 
 ### 在终端连接 Wi-Fi 设备
 
-首次连接时，用 `adb pair` 连接配对弹窗的地址，按提示输入六位码，再用 `adb connect` 连接无线调试主页的地址。请将下列示例地址替换为手机显示的实际地址。
+首次连接时，用 `adb pair` 连接配对弹窗的地址，按提示输入六位码，再用 `adb connect` 连接无线调试主页的地址。请将下列示例地址替换为手机显示的实际地址。也可使用 `PATH` 中已有的 ADB。
 
 ```powershell
-adb pair 192.0.2.10:37099
-adb connect 192.0.2.10:39111
+$adb = Join-Path $env:LOCALAPPDATA 'WaveRelay\tools\platform-tools-37.0.1\adb.exe'
+& $adb pair 192.0.2.10:37099
+& $adb connect 192.0.2.10:39111
 ```
 
 ## 源码构建
 
-在 Windows 上安装 Rust stable、Visual Studio C++ 构建工具、Windows SDK 和 WebView2 Runtime。 [Rust 安装](https://rust-lang.org/tools/install/) · [Tauri 系统要求](https://v2.tauri.app/start/prerequisites/#windows)
+安装使用 MSVC 工具链的 Rust stable、Visual Studio C++ 构建工具、Windows SDK 和 WebView2 Runtime。 [Rust 安装](https://rust-lang.org/tools/install/) · [Tauri Windows 构建要求](https://v2.tauri.app/start/prerequisites/#windows)
 
 ```powershell
 git clone https://github.com/MuRongPIG/WaveRelay.git
@@ -95,13 +106,23 @@ Set-Location WaveRelay
 cargo build --release --locked
 ```
 
-构建产物位于 `target\release\waverelay.exe`。按[快速开始](#快速开始)在仓库根目录准备 Android 服务，再运行 `.\target\release\waverelay.exe`。
+如果已经克隆仓库，在仓库根目录运行 `cargo build --release --locked` 即可。构建产物为 `target\release\waverelay.exe`，同一个 EXE 支持 GUI 和命令行。Windows x64 发布构建和测试已在 Rust 1.99.1 的 `x86_64-pc-windows-msvc` 工具链上验证。
+
+在仓库根目录查看版本和安装选项，然后打开 GUI。
+
+```powershell
+.\target\release\waverelay.exe --version
+.\target\release\waverelay.exe setup --help
+.\target\release\waverelay.exe gui
+```
+
+构建后，按[快速开始](#快速开始)配置运行依赖。从仓库根目录执行其中的安装命令时，可执行文件路径为 `.\target\release\waverelay.exe`。
 
 在仓库根目录检查格式并运行测试。
 
 ```powershell
 cargo fmt --check
-cargo test --locked
+cargo test --release --locked
 ```
 
 ## 项目结构
@@ -110,6 +131,7 @@ cargo test --locked
 | --- | --- |
 | [`src/main.rs`](src/main.rs) | 桌面界面和命令行的统一入口 |
 | [`src/desktop.rs`](src/desktop.rs)、[`src/ui/`](src/ui/) | Tauri 窗口、桌面操作和界面资源 |
+| [`src/tools.rs`](src/tools.rs) | 依赖下载、校验和本地查找 |
 | [`src/adb.rs`](src/adb.rs)、[`src/relay.rs`](src/relay.rs) | 设备发现、Android 服务启动和转发会话 |
 | [`src/protocol.rs`](src/protocol.rs)、[`src/audio.rs`](src/audio.rs) | 音频数据解析、解码、缓冲和播放 |
 
@@ -123,6 +145,6 @@ cargo test --locked
 
 WaveRelay 源码采用 [GNU 通用公共许可证 v3.0](LICENSE)，项目的 SPDX 标识为 `GPL-3.0-only`。 [SPDX 许可证条目](https://spdx.org/licenses/GPL-3.0-only.html)
 
-独立下载的 Android 音频采集服务来自 Genymobile 的 scrcpy，采用 Apache-2.0。 [scrcpy 许可证](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+独立下载的 Android 音频采集服务来自 Genymobile 的 scrcpy，采用 Apache-2.0。 [scrcpy 许可证](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE) ADB 由 Google 提供下载，适用 Android SDK 条款及第三方声明。 [Android SDK 条款](https://developer.android.com/studio/terms)
 
 分发 Windows EXE 时，按 GPLv3 提供获取对应源码的途径，并附上随包分发的第三方组件的许可证声明。若包含 MPL-2.0 代码，还需告知接收者如何获取该部分的对应源码。 [GPLv3 第 6 节](https://opensource.org/license/gpl-3.0) · [Mozilla MPL 常见问题](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)

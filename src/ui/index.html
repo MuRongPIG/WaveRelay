@@ -76,6 +76,23 @@
         <label for="device" data-i18n="selectDevice">Select a device</label>
         <select id="device" disabled><option data-i18n="looking">Looking for devices…</option></select>
         <p class="muted" id="device-detail" role="status" data-i18n="readingDevices">Reading the local ADB device list.</p>
+
+        <details id="setup-panel" class="setup-panel">
+          <summary data-i18n="setupTitle">Dependencies</summary>
+          <div class="setup-row">
+            <span><strong data-i18n="setupAdb">ADB · Android Platform-Tools</strong><small id="setup-adb-state"></small></span>
+            <button id="download-adb" class="secondary" type="button" data-i18n="setupDownload" disabled>Download</button>
+          </div>
+          <div id="setup-license">
+            <a href="https://developer.android.com/studio/terms" target="_blank" rel="noopener noreferrer" data-i18n="setupTerms">Android SDK terms</a>
+            <label class="setup-consent"><input id="accept-sdk" type="checkbox"> <span data-i18n="setupAccept">I accept the Android SDK terms for this download.</span></label>
+          </div>
+          <div class="setup-row">
+            <span><strong data-i18n="setupScrcpy">scrcpy Android server</strong><small id="setup-scrcpy-state"></small></span>
+            <button id="download-scrcpy" class="secondary" type="button" data-i18n="setupDownload" disabled>Download</button>
+          </div>
+          <p id="setup-message" class="muted" role="status"></p>
+        </details>
       </section>
 
       <section class="panel" aria-labelledby="output-heading">

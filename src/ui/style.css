@@ -207,3 +207,15 @@ input[type="range"]:disabled { opacity: .55; }
 @media (max-width: 449px) {
   .network-grid { grid-template-columns: 1fr; }
 }
+
+.setup-panel { margin-top: 10px; border-top: 1px solid var(--edge); padding-top: 8px; }
+.setup-panel summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+.setup-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 9px; font-size: 12px; }
+.setup-row small { display: block; color: var(--muted); margin-top: 2px; }
+.setup-row button { flex-shrink: 0; }
+#setup-license { margin-top: 6px; font-size: 12px; }
+#setup-license a { color: var(--accent); }
+.setup-consent { display: flex; align-items: baseline; gap: 5px; margin-top: 4px; }
+.setup-consent input { accent-color: var(--accent); }
+#setup-message:empty { display: none; }
+#setup-message[data-error="true"] { color: var(--danger); }

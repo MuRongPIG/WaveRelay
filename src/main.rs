@@ -4,6 +4,7 @@ mod desktop;
 mod language;
 mod protocol;
 mod relay;
+mod tools;
 
 use std::{
     env,
@@ -16,9 +17,9 @@ use std::{
 };
 
 use crate::{
-    adb::Adb,
     language::Language,
-    relay::{DEFAULT_SERVER, RelayOptions, run_relay},
+    relay::{RelayOptions, run_relay},
+    tools::{Component, Tools},
 };
 use anyhow::{Context, Result};
 use clap::{Command, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
@@ -27,8 +28,8 @@ use clap::{Command, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnu
 #[command(version, about)]
 struct Cli {
     /// Path to Android Platform Tools' adb executable.
-    #[arg(long, global = true, default_value = "adb", env = "WAVERELAY_ADB")]
-    adb: PathBuf,
+    #[arg(long, global = true, env = "WAVERELAY_ADB")]
+    adb: Option<PathBuf>,
     /// Language for CLI messages or this GUI session.
     #[arg(long, global = true, value_enum, env = "WAVERELAY_LANG")]
     lang: Option<Language>,
@@ -42,14 +43,23 @@ enum Action {
     Gui,
     /// List Android devices visible to ADB, including unauthorized devices.
     Devices,
+    /// Download and verify ADB or the scrcpy Android server.
+    Setup {
+        /// Component to install into WaveRelay's local tools directory.
+        #[arg(value_enum, default_value = "all")]
+        component: Component,
+        /// Accept the Android SDK terms at https://developer.android.com/studio/terms for the ADB download.
+        #[arg(long = "accept-android-sdk-license")]
+        accept_sdk_license: bool,
+    },
     /// Relay Android system audio to the default desktop output.
     Play {
         /// Select a USB or Wi-Fi device from the devices list.
         #[arg(long)]
         serial: Option<String>,
         /// Official scrcpy Android server file for the supported version.
-        #[arg(long, default_value = DEFAULT_SERVER)]
-        server: PathBuf,
+        #[arg(long)]
+        server: Option<PathBuf>,
         /// Target playback buffer in milliseconds.
         #[arg(long, default_value_t = 50, value_parser = clap::value_parser!(u32).range(20..=250))]
         buffer_ms: u32,
@@ -96,6 +106,11 @@ fn command_for(language: Language) -> Command {
         })
         .mut_subcommand("gui", |cmd| cmd.about("打开 WaveRelay 窗口"))
         .mut_subcommand("devices", |cmd| cmd.about("列出 ADB 检测到的 Android 设备"))
+        .mut_subcommand("setup", |cmd| {
+            cmd.about("下载并校验 ADB 或 scrcpy Android 服务")
+                .mut_arg("component", |arg| arg.help("要安装的组件"))
+                .mut_arg("accept_sdk_license", |arg| arg.help("下载 ADB 前接受 https://developer.android.com/studio/terms 的 Android SDK 条款"))
+        })
         .mut_subcommand("play", |cmd| {
             cmd.about("将 Android 音频转发到电脑的默认输出设备")
                 .mut_arg("serial", |arg| arg.help("指定 devices 列出的设备序列号"))
@@ -111,11 +126,12 @@ fn main() -> Result<()> {
     let args: Vec<_> = env::args_os().collect();
     let cli = Cli::from_arg_matches(&command_for(help_language(&args)).get_matches_from(args))?;
     let language = cli.lang.unwrap_or_default();
-    let adb = Adb::new(cli.adb);
+    let tools = Tools::new(cli.adb);
     match cli.command {
-        None | Some(Action::Gui) => Ok(desktop::run(adb, cli.lang)?),
+        None | Some(Action::Gui) => Ok(desktop::run(tools, cli.lang)?),
         Some(Action::Devices) => {
-            let devices = adb
+            let devices = tools
+                .adb()
                 .devices()
                 .context(language.text("Could not read ADB devices", "无法读取 ADB 设备列表"))?;
             if devices.is_empty() {
@@ -128,12 +144,26 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Some(Action::Setup {
+            component,
+            accept_sdk_license,
+        }) => {
+            for path in tools
+                .install(component, accept_sdk_license)
+                .context(language.text("Dependency setup failed", "依赖安装失败"))?
+            {
+                println!("{} {}", language.text("Ready:", "已就绪"), path.display());
+            }
+            Ok(())
+        }
         Some(Action::Play {
             serial,
             server,
             buffer_ms,
             volume,
         }) => {
+            let adb = tools.adb();
+            let server = server.unwrap_or_else(|| tools.server());
             let stop = Arc::new(AtomicBool::new(false));
             let interrupt = stop.clone();
             ctrlc::set_handler(move || interrupt.store(true, Ordering::Relaxed))?;

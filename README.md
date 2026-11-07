@@ -32,21 +32,31 @@ WaveRelay plays audio from an Android phone on the PC's default audio device. An
 
 - A Windows PC with Microsoft Edge WebView2 Runtime for the GUI. [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#windows)
 - A phone running Android 11 or later with USB debugging or wireless debugging enabled.
-- ADB from Android SDK Platform-Tools. Add `platform-tools` to `PATH` and check that `adb version` runs. [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
 
-### 1. Prepare WaveRelay
+### 1. Run WaveRelay and set up its dependencies
 
-Place `waverelay.exe` in a folder or [build it from source](#build-from-source). In the folder containing the EXE, or at the repository root for a source build, download the matching Android service. The checksum check uses the expected SHA-256 for the scrcpy v3.3.4 server. [scrcpy v3.3.4 release](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
+Open `waverelay.exe`. A [source build](#build-from-source) puts the executable in `target\release`, where you can run it directly. Expand **Dependencies** in the app to download missing components.
+
+From a terminal in the EXE folder, choose the setup command for the components you need. To install both ADB and the scrcpy Android service, review and accept the [Android SDK terms](https://developer.android.com/studio/terms), then run the following command.
 
 ```powershell
-$server = '.local\scrcpy-server-v3.3.4'
-$expected = '8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e'
-New-Item -ItemType Directory -Force '.local' | Out-Null
-Invoke-WebRequest -Uri 'https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4' -OutFile $server
-if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
-    throw 'scrcpy server checksum mismatch.'
-}
+.\waverelay.exe setup all --accept-android-sdk-license
 ```
+
+To install just the scrcpy Android service, use this command.
+
+```powershell
+.\waverelay.exe setup scrcpy
+```
+
+WaveRelay downloads the ADB files from Google's Windows Platform-Tools 37.0.1 archive and the Android service from scrcpy v3.3.4. It verifies each download against a pinned SHA-256 and installs it under `%LOCALAPPDATA%\WaveRelay\tools`. The app reuses installed files on subsequent launches. [Platform-Tools release notes](https://developer.android.com/tools/releases/platform-tools) · [scrcpy v3.3.4 release](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
+
+<details>
+<summary>Manual setup</summary>
+
+Add an existing Platform-Tools directory to `PATH` or pass `--adb` with its `adb.exe` path. Place the v3.3.4 Android service in `.local\scrcpy-server-v3.3.4` next to the EXE or in the repository root. Its SHA-256 is `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`. [Official Android service download](https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4)
+
+</details>
 
 ### 2. Connect and play
 
@@ -59,7 +69,7 @@ Use the **中文 / EN** button in the title bar to switch the interface language
 
 ## Command line
 
-Run these commands from the folder containing the EXE and `.local`. From the repository root, use `.\target\release\waverelay.exe` in place of `.\waverelay.exe`. The network address below is an example.
+Run these commands from the folder containing the EXE. From the repository root, use `.\target\release\waverelay.exe` in place of `.\waverelay.exe`. The network address below is an example.
 
 ```powershell
 .\waverelay.exe --help
@@ -72,22 +82,23 @@ Run these commands from the folder containing the EXE and `.local`. From the rep
 
 - `play` streams PCM. When multiple devices are online, pass the serial shown by `devices` to `--serial`. Press Ctrl+C to stop.
 - `--buffer-ms` sets the target playback buffer in milliseconds. Capture, transport, and the audio device also contribute to end-to-end latency.
-- Use `--adb` or `WAVERELAY_ADB` to select an ADB executable. Override the Android service path with `play --server` for the CLI or `WAVERELAY_SERVER` for the GUI.
+- Use `--adb` or `WAVERELAY_ADB` to select an ADB executable. WaveRelay otherwise prefers its managed ADB and falls back to `PATH`. For the Android service, `play --server` takes precedence, followed by `WAVERELAY_SERVER`, the managed copy, and `.local`.
 
 Use `--lang en` or `--lang zh-CN` for command descriptions and application messages. The CLI defaults to English. You can set `WAVERELAY_LANG` as a default or use `gui --lang en` to choose the initial language for one GUI session. ADB and operating-system diagnostics may appear in their original language.
 
 ### Wi-Fi from the terminal
 
-For a first-time connection, use the pairing dialog address with `adb pair` and enter the six-digit code at the prompt. Then use the wireless debugging screen address with `adb connect`. Replace the example addresses with the ones shown on your phone.
+For a first-time connection, use the pairing dialog address with `adb pair` and enter the six-digit code at the prompt. Then use the wireless debugging screen address with `adb connect`. Replace the example addresses with the ones shown on your phone. If you already have ADB on `PATH`, you can use that executable instead.
 
 ```powershell
-adb pair 192.0.2.10:37099
-adb connect 192.0.2.10:39111
+$adb = Join-Path $env:LOCALAPPDATA 'WaveRelay\tools\platform-tools-37.0.1\adb.exe'
+& $adb pair 192.0.2.10:37099
+& $adb connect 192.0.2.10:39111
 ```
 
 ## Build from source
 
-On Windows, install stable Rust, the Visual Studio C++ build tools, the Windows SDK, and WebView2 Runtime. [Rust installation](https://rust-lang.org/tools/install/) · [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#windows)
+Install stable Rust with the MSVC toolchain, the Visual Studio C++ build tools, the Windows SDK, and WebView2 Runtime. [Rust installation](https://rust-lang.org/tools/install/) · [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows)
 
 ```powershell
 git clone https://github.com/MuRongPIG/WaveRelay.git
@@ -95,13 +106,23 @@ Set-Location WaveRelay
 cargo build --release --locked
 ```
 
-The build produces `target\release\waverelay.exe`. Prepare the Android service from the repository root as shown in [Quick start](#quick-start), then run `.\target\release\waverelay.exe`.
+If you already have a checkout, run `cargo build --release --locked` from its root. The build produces one executable for the GUI and CLI at `target\release\waverelay.exe`. The Windows x64 release build and tests were verified with Rust 1.99.1 and the `x86_64-pc-windows-msvc` toolchain.
+
+From the repository root, check the version and setup options, then launch the GUI.
+
+```powershell
+.\target\release\waverelay.exe --version
+.\target\release\waverelay.exe setup --help
+.\target\release\waverelay.exe gui
+```
+
+Use [Quick start](#quick-start) to configure runtime dependencies after building. When running its setup commands from the repository root, use `.\target\release\waverelay.exe` as the executable path.
 
 Run the following checks from the repository root.
 
 ```powershell
 cargo fmt --check
-cargo test --locked
+cargo test --release --locked
 ```
 
 ## Project layout
@@ -110,6 +131,7 @@ cargo test --locked
 | --- | --- |
 | [`src/main.rs`](src/main.rs) | Shared executable entry point for the GUI and CLI |
 | [`src/desktop.rs`](src/desktop.rs), [`src/ui/`](src/ui/) | Tauri window, desktop controls, and interface assets |
+| [`src/tools.rs`](src/tools.rs) | Download, checksum verification, and local dependency lookup |
 | [`src/adb.rs`](src/adb.rs), [`src/relay.rs`](src/relay.rs) | Device discovery, Android service startup, and relay sessions |
 | [`src/protocol.rs`](src/protocol.rs), [`src/audio.rs`](src/audio.rs) | Stream framing, decoding, buffering, and playback |
 
@@ -123,6 +145,6 @@ When filing a report, include your Windows version, Android version, USB or Wi-F
 
 WaveRelay's source is licensed under the [GNU General Public License v3.0](LICENSE). The package uses the SPDX identifier `GPL-3.0-only`. [SPDX license entry](https://spdx.org/licenses/GPL-3.0-only.html)
 
-The separately downloaded Android capture service comes from Genymobile's scrcpy and is licensed under Apache-2.0. [scrcpy license](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+The separately downloaded Android capture service comes from Genymobile's scrcpy and is licensed under Apache-2.0. [scrcpy license](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE) ADB is downloaded from Google under the applicable Android SDK terms and third-party notices. [Android SDK terms](https://developer.android.com/studio/terms)
 
 When distributing the Windows EXE, follow GPLv3's corresponding-source requirements and include the license notices for the third-party components you distribute. For any included MPL-2.0 code, tell recipients how to obtain its corresponding source. [GPLv3 section 6](https://opensource.org/license/gpl-3.0) · [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)

@@ -32,6 +32,13 @@ impl Adb {
         Self { path }
     }
 
+    pub fn available(&self) -> bool {
+        self.command(None)
+            .arg("version")
+            .output()
+            .is_ok_and(|output| output.status.success())
+    }
+
     pub fn devices(&self) -> Result<Vec<Device>> {
         let output = self.run(None, &["devices", "-l"])?;
         Ok(parse_devices(&output))
