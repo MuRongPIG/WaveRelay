@@ -1,4 +1,5 @@
 const invoke = window.__TAURI__.core.invoke;
+const { t } = i18n;
 const byId = (id) => document.getElementById(id);
 const device = byId("device");
 const refresh = byId("refresh");
@@ -14,21 +15,14 @@ const buffer = byId("buffer");
 const toggle = byId("toggle");
 const errorBox = byId("error");
 
-const phaseNames = {
-  idle: "待连接",
-  connecting: "正在连接",
-  streaming: "转发中",
-  stopping: "正在停止",
-  error: "转发中断",
-};
-
 let status = { phase: "idle" };
 let devices = [];
 let refreshing = false;
 let acting = false;
 let networkBusy = false;
-let discoveryError = "";
-let actionError = "";
+let discoveryError;
+let actionError;
+let networkMessage;
 let volumeTimer;
 let statusRequest = 0;
 
@@ -36,21 +30,22 @@ function active() {
   return ["connecting", "streaming", "stopping"].includes(status.phase);
 }
 
+function messageText(message) {
+  if (!message) return "";
+  return [message.key && t(message.key, message.values), message.detail].filter(Boolean).join(" ");
+}
+
 function render() {
   const running = active();
   const selected = devices.find((entry) => entry.serial === device.value);
   byId("badge").dataset.phase = status.phase;
   const label = byId("state-label");
-  if (label.textContent !== phaseNames[status.phase]) {
-    label.textContent = phaseNames[status.phase];
+  if (label.textContent !== t(status.phase)) {
+    label.textContent = t(status.phase);
   }
-  byId("state-detail").textContent = {
-    idle: "选择设备后开始转发。",
-    connecting: "正在启动 Android 音频服务，等待接收音频。",
-    streaming: `${status.serial} · 48 kHz · 立体声`,
-    stopping: "正在关闭音频服务并清理 ADB 连接。",
-    error: "检查手机的连接与调试授权后，可以重新开始。",
-  }[status.phase];
+  byId("state-detail").textContent = t(status.phase + "Detail", { serial: status.serial });
+  const networkText = messageText(networkMessage);
+  if (networkStatus.textContent !== networkText) networkStatus.textContent = networkText;
 
   const controlsLocked = running || acting || networkBusy;
   usb.disabled = controlsLocked;
@@ -60,18 +55,18 @@ function render() {
     for (const control of form.elements) control.disabled = controlsLocked;
   }
   refresh.disabled = refreshing || controlsLocked;
-  refresh.textContent = refreshing ? "刷新中…" : "刷新";
+  refresh.textContent = t(refreshing ? "refreshing" : "refresh");
   device.disabled = refreshing || controlsLocked || !device.value;
   buffer.disabled = running || acting;
   quality.disabled = running || acting;
   toggle.disabled = acting || status.phase === "stopping" ||
     (!running && (refreshing || networkBusy || selected?.state !== "device"));
   toggle.dataset.mode = running ? "stop" : "start";
-  byId("toggle-text").textContent = status.phase === "stopping" ? "正在停止…" :
-    running ? "停止转发" : "开始转发";
+  byId("toggle-text").textContent = status.phase === "stopping" ? t("stoppingButton") :
+    t(running ? "stop" : "start");
   byId("toggle-icon").setAttribute("d", running ? "M5 5h10v10H5z" : "M6 4l10 6-10 6z");
 
-  const error = actionError || status.error || discoveryError;
+  const error = messageText(actionError || (status.error && { key: "relayFailed", detail: status.error }) || discoveryError);
   if (errorBox.textContent !== error) errorBox.textContent = error;
   errorBox.hidden = !error;
 }
@@ -85,38 +80,37 @@ function renderDevices(preferred = device.value) {
   device.replaceChildren();
   const detail = byId("device-detail");
   if (!visible.length) {
-    device.add(new Option(discoveryError ? "无法读取设备" : "未发现设备", ""));
+    device.add(new Option(t(discoveryError ? "deviceError" : "noDevices"), ""));
     detail.textContent = discoveryError
-      ? "请检查 ADB 是否可用，然后重试。"
+      ? t("adbHint")
       : networkMode.checked
-        ? "通过上方入口连接手机，或刷新已连接的网络设备。"
-        : "连接 USB 数据线，在手机上授权 USB 调试，然后刷新。";
+        ? t("emptyNetwork")
+        : t("emptyUsb");
     return;
   }
 
-  const descriptions = { device: "已就绪", unauthorized: "待授权", offline: "离线" };
   for (const entry of visible) {
-    const state = descriptions[entry.state] || entry.state;
+    const state = t(entry.state);
     device.add(new Option(entry.serial + " · " + state, entry.serial));
   }
   device.value = visible.find((entry) => entry.serial === preferred)?.serial ||
     visible.find((entry) => entry.state === "device")?.serial || visible[0].serial;
   const ready = visible.filter((entry) => entry.state === "device").length;
   detail.textContent = ready
-    ? ready + " 台可用设备 · 共发现 " + visible.length + " 台"
-    : "请在手机上确认调试授权，或重新连接离线设备。";
+    ? t("deviceCount", { ready, total: visible.length })
+    : t("authorizationHint");
 }
 
 async function loadDevices(preferred) {
   refreshing = true;
-  discoveryError = "";
-  actionError = "";
+  discoveryError = null;
+  actionError = null;
   render();
   try {
     devices = await invoke("list_devices");
   } catch (error) {
     devices = [];
-    discoveryError = `读取 ADB 设备失败。 ${error}`;
+    discoveryError = { key: "discoveryFailed", detail: String(error) };
   } finally {
     renderDevices(preferred);
     refreshing = false;
@@ -137,7 +131,7 @@ async function poll() {
   try {
     await loadStatus();
   } catch (error) {
-    actionError = `无法读取转发状态。 ${error}`;
+    actionError = { key: "statusFailed", detail: String(error) };
     render();
   } finally {
     setTimeout(poll, 350);
@@ -158,7 +152,7 @@ for (const [id, method] of [
     try {
       await window.__TAURI__.window.getCurrentWindow()[method]();
     } catch (error) {
-      actionError = "无法操作窗口。 " + error;
+      actionError = { key: "windowFailed", detail: String(error) };
       render();
     }
   });
@@ -166,13 +160,14 @@ for (const [id, method] of [
 
 toggle.addEventListener("click", async () => {
   acting = true;
-  actionError = "";
+  actionError = null;
   render();
   try {
     if (active()) {
       await invoke("stop_relay");
     } else {
       await invoke("start_relay", {
+        language: i18n.language,
         settings: {
           serial: device.value,
           bufferMs: Number(buffer.value),
@@ -183,7 +178,7 @@ toggle.addEventListener("click", async () => {
     }
     await loadStatus();
   } catch (error) {
-    actionError = String(error);
+    actionError = { key: "requestFailed", detail: String(error) };
   } finally {
     acting = false;
     render();
@@ -197,18 +192,16 @@ async function wireless(pair) {
   if (pair) pairCode.value = "";
   networkBusy = true;
   networkStatus.dataset.error = "false";
-  networkStatus.textContent = pair ? "正在配对…" : "正在连接…";
+  networkMessage = { key: pair ? "pairing" : "networkConnecting" };
   render();
   try {
-    const serial = await invoke("wireless_device", { address, pairingCode });
-    networkStatus.textContent = pair
-      ? "配对成功。如果设备尚未出现，请用无线调试主页的地址连接。"
-      : "连接成功，正在更新设备列表。";
+    const serial = await invoke("wireless_device", { address, pairingCode, language: i18n.language });
+    networkMessage = { key: pair ? "paired" : "networkRefreshing" };
     await loadDevices(pair ? undefined : serial);
-    if (!pair) networkStatus.textContent = "已连接 " + serial;
+    if (!pair) networkMessage = { key: "networkConnected", values: { serial } };
   } catch (error) {
     networkStatus.dataset.error = "true";
-    networkStatus.textContent = String(error);
+    networkMessage = { detail: String(error) };
   } finally {
     networkBusy = false;
     render();
@@ -243,15 +236,12 @@ volume.addEventListener("input", () => {
       try {
         await invoke("set_volume", { volume: Number(volume.value) });
       } catch (error) {
-        actionError = `无法更新音量。 ${error}`;
+        actionError = { key: "volumeFailed", detail: String(error) };
         render();
       }
     }, 50);
   }
 });
-
-loadDevices();
-poll();
 
 let fittingHeight = false;
 let lastHeight = 0;
@@ -279,3 +269,25 @@ async function fitWindowHeight() {
 }
 
 new ResizeObserver(fitWindowHeight).observe(document.body);
+
+let languageChanged = false;
+byId("language-toggle").addEventListener("click", () => {
+  languageChanged = true;
+  i18n.apply(i18n.language === "en" ? "zh-CN" : "en", true);
+  renderDevices();
+  render();
+});
+
+async function initialize() {
+  i18n.apply();
+  try {
+    const language = await invoke("gui_language");
+    if (language && !languageChanged) i18n.apply(language);
+  } catch (error) {
+    console.warn("Could not read the startup language:", error);
+  }
+  void loadDevices();
+  void poll();
+}
+
+void initialize();

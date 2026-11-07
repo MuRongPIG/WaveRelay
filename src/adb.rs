@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 
-use crate::protocol::AudioQuality;
+use crate::{language::Language, protocol::AudioQuality};
 
 pub const SERVER_VERSION: &str = "3.3.4";
 const POLL: Duration = Duration::from_millis(150);
@@ -37,17 +37,28 @@ impl Adb {
         Ok(parse_devices(&output))
     }
 
-    pub fn wireless(&self, address: &str, code: Option<&str>) -> Result<String> {
-        let address: SocketAddr = address
-            .trim()
-            .parse()
-            .context("请输入无线调试页面显示的 IP:端口")?;
-        ensure!(address.port() != 0, "端口必须在 1–65535 之间");
+    pub fn wireless(
+        &self,
+        address: &str,
+        code: Option<&str>,
+        language: Language,
+    ) -> Result<String> {
+        let address: SocketAddr = address.trim().parse().context(language.text(
+            "Enter the IP address and port shown on the Wireless debugging screen",
+            "请输入无线调试页面显示的 IP:端口",
+        ))?;
+        ensure!(
+            address.port() != 0,
+            language.text(
+                "The port must be between 1 and 65535",
+                "端口必须在 1–65535 之间"
+            )
+        );
         let address = address.to_string();
         if let Some(code) = code {
             ensure!(
                 code.len() == 6 && code.bytes().all(|byte| byte.is_ascii_digit()),
-                "请输入六位数字配对码"
+                language.text("Enter a six-digit pairing code", "请输入六位数字配对码")
             );
         }
 
@@ -61,20 +72,30 @@ impl Adb {
             })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
-            .with_context(|| format!("无法运行 ADB ({})", self.path.display()))?;
+        let mut child = command.spawn().with_context(|| {
+            format!(
+                "{} ({})",
+                language.text("Could not run ADB", "无法运行 ADB"),
+                self.path.display()
+            )
+        })?;
         let result = (|| {
             if let Some(code) = code {
                 // Pass the pairing code through stdin so it is absent from process arguments.
-                let mut stdin = child.stdin.take().context("无法向 ADB 输入配对码")?;
-                writeln!(stdin, "{code}").context("无法向 ADB 输入配对码")?;
+                let mut stdin = child.stdin.take().context(language.text(
+                    "Could not send the pairing code to ADB",
+                    "无法向 ADB 输入配对码",
+                ))?;
+                writeln!(stdin, "{code}").context(language.text(
+                    "Could not send the pairing code to ADB",
+                    "无法向 ADB 输入配对码",
+                ))?;
             }
             let start = Instant::now();
             while child.try_wait()?.is_none() {
                 ensure!(
                     start.elapsed() < Duration::from_secs(20),
-                    "ADB 无线操作超时"
+                    language.text("The ADB wireless operation timed out", "ADB 无线操作超时")
                 );
                 thread::sleep(POLL);
             }
@@ -90,7 +111,10 @@ impl Adb {
         if code.is_some() {
             ensure!(
                 output.status.success() && reply.contains("Successfully paired to"),
-                "配对失败。请确认配对地址和配对码有效，然后重试"
+                language.text(
+                    "Pairing failed. Check the pairing address and code, then try again",
+                    "配对失败。请确认配对地址和配对码有效，然后重试"
+                )
             );
         } else {
             let connected = reply.lines().any(|line| {
@@ -98,7 +122,7 @@ impl Adb {
             });
             ensure!(
                 output.status.success() && connected,
-                "连接失败。请检查无线调试主页的连接地址、配对状态和网络"
+                language.text("Connection failed. Check the Wireless debugging address, pairing status, and network", "连接失败。请检查无线调试主页的连接地址、配对状态和网络")
             );
         }
         Ok(address)

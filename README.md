@@ -23,7 +23,7 @@ WaveRelay plays audio from an Android phone on the PC's default audio device. An
 
 - **USB and Wi-Fi** — discover authorized devices and pair over Wi-Fi from the desktop interface.
 - **Adjustable audio** — choose lossless PCM or Opus at 96 or 192 kbps in the GUI. Set the target playback buffer before starting and adjust volume while streaming.
-- **Compact desktop interface** — a window that fits its content, with light and dark themes.
+- **Compact desktop interface** — a window that fits its content, with English and Simplified Chinese, plus light and dark themes.
 - **One executable** — launch the GUI by double-clicking `waverelay.exe`, or pass a subcommand to use it from a terminal.
 
 ## Quick start
@@ -51,9 +51,11 @@ if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
 ### 2. Connect and play
 
 - **USB** — connect the phone, approve the debugging prompt on Android, and refresh the USB device list.
-- **Wi-Fi** — connect the phone and PC to the same local network. Open **网络连接** (Network) in WaveRelay. For first-time pairing, enter the address and six-digit code from Android's pairing dialog. To connect, use the address shown on the main **Wireless debugging** screen. The two ports are usually different. [Android wireless debugging](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi)
+- **Wi-Fi** — connect the phone and PC to the same local network. Open **Network** in WaveRelay. For first-time pairing, enter the address and six-digit code from Android's pairing dialog. To connect, use the address shown on the main **Wireless debugging** screen. The two ports are usually different. [Android wireless debugging](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi)
 
-Select the device and click **开始转发** (Start streaming). Keep the phone unlocked when starting audio capture on Android 11. [scrcpy audio documentation](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md)
+Select the device and click **Start streaming**. Keep the phone unlocked when starting audio capture on Android 11. [scrcpy audio documentation](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md)
+
+Use the **中文 / EN** button in the title bar to switch the interface language. The GUI follows the system language on first launch and remembers a manual selection.
 
 ## Command line
 
@@ -61,6 +63,7 @@ Run these commands from the folder containing the EXE and `.local`. From the rep
 
 ```powershell
 .\waverelay.exe --help
+.\waverelay.exe --lang zh-CN --help
 .\waverelay.exe gui
 .\waverelay.exe devices
 .\waverelay.exe play
@@ -70,6 +73,8 @@ Run these commands from the folder containing the EXE and `.local`. From the rep
 - `play` streams PCM. When multiple devices are online, pass the serial shown by `devices` to `--serial`. Press Ctrl+C to stop.
 - `--buffer-ms` sets the target playback buffer in milliseconds. Capture, transport, and the audio device also contribute to end-to-end latency.
 - Use `--adb` or `WAVERELAY_ADB` to select an ADB executable. Override the Android service path with `play --server` for the CLI or `WAVERELAY_SERVER` for the GUI.
+
+Use `--lang en` or `--lang zh-CN` for command descriptions and application messages. The CLI defaults to English. You can set `WAVERELAY_LANG` as a default or use `gui --lang en` to choose the initial language for one GUI session. ADB and operating-system diagnostics may appear in their original language.
 
 ### Wi-Fi from the terminal
 
@@ -116,4 +121,8 @@ When filing a report, include your Windows version, Android version, USB or Wi-F
 
 ## Licensing and acknowledgments
 
-WaveRelay's source license is pending. The separately downloaded Android capture service comes from Genymobile's scrcpy and is licensed under Apache-2.0. [scrcpy license](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+WaveRelay's source is licensed under the [GNU General Public License v3.0](LICENSE). The package uses the SPDX identifier `GPL-3.0-only`. [SPDX license entry](https://spdx.org/licenses/GPL-3.0-only.html)
+
+The separately downloaded Android capture service comes from Genymobile's scrcpy and is licensed under Apache-2.0. [scrcpy license](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+
+When distributing the Windows EXE, follow GPLv3's corresponding-source requirements and include the license notices for the third-party components you distribute. For any included MPL-2.0 code, tell recipients how to obtain its corresponding source. [GPLv3 section 6](https://opensource.org/license/gpl-3.0) · [Mozilla MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)

@@ -1,10 +1,13 @@
 mod adb;
 mod audio;
 mod desktop;
+mod language;
 mod protocol;
 mod relay;
 
 use std::{
+    env,
+    ffi::OsString,
     path::PathBuf,
     sync::{
         Arc,
@@ -14,10 +17,11 @@ use std::{
 
 use crate::{
     adb::Adb,
+    language::Language,
     relay::{DEFAULT_SERVER, RelayOptions, run_relay},
 };
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+use anyhow::{Context, Result};
+use clap::{Command, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -25,6 +29,9 @@ struct Cli {
     /// Path to Android Platform Tools' adb executable.
     #[arg(long, global = true, default_value = "adb", env = "WAVERELAY_ADB")]
     adb: PathBuf,
+    /// Language for CLI messages or this GUI session.
+    #[arg(long, global = true, value_enum, env = "WAVERELAY_LANG")]
+    lang: Option<Language>,
     #[command(subcommand)]
     command: Option<Action>,
 }
@@ -52,16 +59,68 @@ enum Action {
     },
 }
 
+fn help_language(args: &[OsString]) -> Language {
+    // Clap can exit while displaying help, so choose its language before parsing.
+    let arguments = &args[1..];
+    let requested = arguments
+        .iter()
+        .enumerate()
+        .take_while(|(_, arg)| *arg != "--")
+        .find_map(|(index, arg)| {
+            let arg = arg.to_str()?;
+            if arg == "--lang" {
+                arguments.get(index + 1)?.to_str()
+            } else {
+                arg.strip_prefix("--lang=")
+            }
+        });
+    let environment = env::var("WAVERELAY_LANG").ok();
+    requested
+        .or(environment.as_deref())
+        .and_then(|value| Language::from_str(value, false).ok())
+        .unwrap_or_default()
+}
+
+fn command_for(language: Language) -> Command {
+    let command = Cli::command();
+    if language == Language::En {
+        return command;
+    }
+    command
+        .about("通过 ADB 将 Android 系统音频转发到电脑")
+        .mut_arg("adb", |arg| {
+            arg.help("指定 Android Platform-Tools 的 adb 程序路径")
+        })
+        .mut_arg("lang", |arg| {
+            arg.help("指定命令行语言或本次 GUI 的初始语言")
+        })
+        .mut_subcommand("gui", |cmd| cmd.about("打开 WaveRelay 窗口"))
+        .mut_subcommand("devices", |cmd| cmd.about("列出 ADB 检测到的 Android 设备"))
+        .mut_subcommand("play", |cmd| {
+            cmd.about("将 Android 音频转发到电脑的默认输出设备")
+                .mut_arg("serial", |arg| arg.help("指定 devices 列出的设备序列号"))
+                .mut_arg("server", |arg| {
+                    arg.help("指定配套的 scrcpy Android 服务文件")
+                })
+                .mut_arg("buffer_ms", |arg| arg.help("设置目标播放缓冲，单位为毫秒"))
+                .mut_arg("volume", |arg| arg.help("设置输出音量百分比"))
+        })
+}
+
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let args: Vec<_> = env::args_os().collect();
+    let cli = Cli::from_arg_matches(&command_for(help_language(&args)).get_matches_from(args))?;
+    let language = cli.lang.unwrap_or_default();
     let adb = Adb::new(cli.adb);
     match cli.command {
-        None | Some(Action::Gui) => Ok(desktop::run(adb)?),
+        None | Some(Action::Gui) => Ok(desktop::run(adb, cli.lang)?),
         Some(Action::Devices) => {
-            let devices = adb.devices()?;
+            let devices = adb
+                .devices()
+                .context(language.text("Could not read ADB devices", "无法读取 ADB 设备列表"))?;
             if devices.is_empty() {
                 println!(
-                    "No devices found. Connect an Android device with USB debugging or pair it over Wi-Fi."
+                    "{}", language.text("No devices found. Connect an Android device with USB debugging or pair it over Wi-Fi.", "未找到设备。请连接已开启 USB 调试的 Android 设备，或通过 Wi-Fi 配对。")
                 );
             }
             for device in devices {
@@ -88,10 +147,18 @@ fn main() -> Result<()> {
                 },
                 stop.clone(),
                 Arc::new(AtomicU32::new(volume)),
-                |serial| eprintln!("Relaying Android audio from {serial}. Press Ctrl+C to stop."),
-            )?;
+                |serial| match language {
+                    Language::En => {
+                        eprintln!("Relaying Android audio from {serial}. Press Ctrl+C to stop.")
+                    }
+                    Language::ZhCn => {
+                        eprintln!("正在转发 {serial} 的 Android 音频。按 Ctrl+C 停止。")
+                    }
+                },
+            )
+            .context(language.text("Audio relay failed", "音频转发失败"))?;
             if stop.load(Ordering::Relaxed) {
-                eprintln!("Relay stopped.");
+                eprintln!("{}", language.text("Relay stopped.", "转发已停止。"));
             }
             Ok(())
         }

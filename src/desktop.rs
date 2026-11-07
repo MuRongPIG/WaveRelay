@@ -10,6 +10,7 @@ use std::{
 
 use crate::{
     adb::Adb,
+    language::Language,
     protocol::AudioQuality,
     relay::{DEFAULT_SERVER, RelayOptions, run_relay},
 };
@@ -58,6 +59,7 @@ impl SessionState {
 struct Controller {
     session: Arc<Mutex<SessionState>>,
     adb: Adb,
+    language: Option<Language>,
 }
 
 #[derive(Serialize)]
@@ -120,15 +122,21 @@ async fn list_devices(controller: State<'_, Controller>) -> Result<Vec<Device>, 
 async fn wireless_device(
     address: String,
     pairing_code: Option<String>,
+    language: Language,
     controller: State<'_, Controller>,
 ) -> Result<String, String> {
     let adb = controller.adb.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        adb.wireless(&address, pairing_code.as_deref())
+        adb.wireless(&address, pairing_code.as_deref(), language)
             .map_err(|error| format!("{error:#}"))
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+fn gui_language(controller: State<'_, Controller>) -> Option<Language> {
+    controller.language
 }
 
 #[tauri::command]
@@ -139,6 +147,7 @@ fn relay_status(controller: State<'_, Controller>) -> Status {
 #[tauri::command]
 fn start_relay(
     settings: Settings,
+    language: Language,
     controller: State<'_, Controller>,
     app: AppHandle,
 ) -> Result<(), String> {
@@ -146,12 +155,22 @@ fn start_relay(
         || !(20..=250).contains(&settings.buffer_ms)
         || settings.volume > 100
     {
-        return Err("请选择设备，并检查缓冲和音量设置。".into());
+        return Err(language
+            .text(
+                "Select a device and check the buffer and volume settings.",
+                "请选择设备，并检查缓冲和音量设置。",
+            )
+            .into());
     }
     let shared = controller.session.clone();
     let mut state = controller.session.lock().unwrap();
     if state.active.is_some() || state.closing {
-        return Err("当前转发会话仍在运行。".into());
+        return Err(language
+            .text(
+                "A relay session is already active.",
+                "当前转发会话仍在运行。",
+            )
+            .into());
     }
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -194,7 +213,12 @@ fn start_relay(
                 app.exit(0);
             }
         })
-        .map_err(|error| format!("无法启动转发线程。{error}"))?;
+        .map_err(|error| {
+            format!(
+                "{} {error}",
+                language.text("Could not start the relay thread.", "无法启动转发线程。")
+            )
+        })?;
     state.active = Some(ActiveRelay { stop, volume });
     state.status = Status {
         phase: Phase::Connecting,
@@ -245,7 +269,7 @@ fn fit_window_height(window: Window, height: u32) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn run(adb: Adb) -> tauri::Result<()> {
+pub fn run(adb: Adb, language: Option<Language>) -> tauri::Result<()> {
     #[cfg(windows)]
     detach_private_console();
 
@@ -253,8 +277,10 @@ pub fn run(adb: Adb) -> tauri::Result<()> {
         .manage(Controller {
             session: Arc::new(Mutex::new(SessionState::default())),
             adb,
+            language,
         })
         .invoke_handler(tauri::generate_handler![
+            gui_language,
             list_devices,
             wireless_device,
             relay_status,

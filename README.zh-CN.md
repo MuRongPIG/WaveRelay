@@ -23,7 +23,7 @@ WaveRelay 将 Android 手机的音频转发到电脑的默认音频设备。Andr
 
 - **USB 和 Wi-Fi**　查找已授权的设备，并在桌面界面中完成无线配对。
 - **可调播放设置**　在 GUI 中选择 PCM 无损传输或 96、192 kbps Opus，启动前设置目标缓冲，转发时调节音量。
-- **紧凑的桌面界面**　窗口高度随内容调整，支持浅色和深色主题。
+- **紧凑的桌面界面**　窗口高度随内容调整，支持英文、简体中文以及浅色和深色主题。
 - **单个可执行文件**　双击 `waverelay.exe` 打开桌面界面，也可以传入子命令在终端使用。
 
 ## 快速开始
@@ -55,12 +55,15 @@ if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
 
 选择设备并点击「开始转发」。Android 11 在启动音频采集时需要保持手机解锁。 [scrcpy 音频说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md)
 
+点击标题栏的 **中文 / EN** 按钮切换界面语言。GUI 首次启动时跟随系统语言，并记住手动选择。
+
 ## 命令行
 
 在包含 EXE 和 `.local` 的目录中运行以下命令。如果从仓库根目录运行，将 `.\waverelay.exe` 替换为 `.\target\release\waverelay.exe`。以下网络地址仅用于示例。
 
 ```powershell
 .\waverelay.exe --help
+.\waverelay.exe --lang zh-CN --help
 .\waverelay.exe gui
 .\waverelay.exe devices
 .\waverelay.exe play
@@ -70,6 +73,8 @@ if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
 - `play` 使用 PCM。多台设备在线时，用 `--serial` 指定 `devices` 显示的序列号。按 Ctrl+C 停止。
 - `--buffer-ms` 设置目标播放缓冲，单位为毫秒。实际端到端延迟还受采集、传输和输出设备影响。
 - 可用 `--adb` 或 `WAVERELAY_ADB` 指定 ADB。CLI 通过 `play --server` 指定 Android 服务文件，GUI 通过 `WAVERELAY_SERVER` 指定。
+
+用 `--lang en` 或 `--lang zh-CN` 设置命令说明和应用消息的语言。命令行默认使用英文。可以通过 `WAVERELAY_LANG` 设置默认语言，或用 `gui --lang en` 指定本次 GUI 的初始语言。ADB 和操作系统的诊断信息可能保留原文。
 
 ### 在终端连接 Wi-Fi 设备
 
@@ -116,4 +121,8 @@ cargo test --locked
 
 ## 许可证与致谢
 
-WaveRelay 自身的源码许可证待确定。独立下载的 Android 音频采集服务来自 Genymobile 的 scrcpy，采用 Apache-2.0。 [scrcpy 许可证](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+WaveRelay 源码采用 [GNU 通用公共许可证 v3.0](LICENSE)，项目的 SPDX 标识为 `GPL-3.0-only`。 [SPDX 许可证条目](https://spdx.org/licenses/GPL-3.0-only.html)
+
+独立下载的 Android 音频采集服务来自 Genymobile 的 scrcpy，采用 Apache-2.0。 [scrcpy 许可证](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+
+分发 Windows EXE 时，按 GPLv3 提供获取对应源码的途径，并附上随包分发的第三方组件的许可证声明。若包含 MPL-2.0 代码，还需告知接收者如何获取该部分的对应源码。 [GPLv3 第 6 节](https://opensource.org/license/gpl-3.0) · [Mozilla MPL 常见问题](https://www.mozilla.org/en-US/MPL/2.0/FAQ/)

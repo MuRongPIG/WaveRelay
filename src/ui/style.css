@@ -67,7 +67,8 @@ button:disabled { cursor: default; opacity: .48; }
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 12px 0 16px;
+  min-width: 0;
+  padding: 0 6px 0 10px;
   app-region: drag;
 }
 .titlebar-drag > * { pointer-events: none; }
@@ -75,7 +76,7 @@ button:disabled { cursor: default; opacity: .48; }
 .window-controls button {
   display: grid;
   place-items: center;
-  width: 36px;
+  width: 32px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -107,7 +108,10 @@ button:disabled { cursor: default; opacity: .48; }
   white-space: nowrap;
 }
 .badge { gap: 6px; padding: 4px 8px; font-weight: 600; }
-.badge i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+#language-toggle { font-size: 12px; font-weight: 650; }
+#state-label { overflow: hidden; text-overflow: ellipsis; }
+.titlebar .badge { min-width: 0; }
+.badge i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .badge[data-phase="streaming"] { color: var(--accent); border-color: var(--control-edge); }
 .badge[data-phase="connecting"], .badge[data-phase="stopping"] { color: var(--warning); }
 .badge[data-phase="error"] { color: var(--danger); }
