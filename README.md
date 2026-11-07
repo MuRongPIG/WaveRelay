@@ -1,81 +1,119 @@
-# WaveRelay
+<p align="center">
+  <img src="src/icons/icon.png" alt="" width="64" height="64">
+</p>
 
-WaveRelay 将 Android 手机的系统音频通过 USB 或局域网转发到电脑，在电脑的默认音频设备上播放。当前版本面向 Windows 和 Android 11 及以上版本。手机通过 ADB 临时运行音频采集服务，无需 Root 或安装常驻应用。
+<h1 align="center">WaveRelay</h1>
 
-- **一个可执行文件**　双击启动桌面界面，也可以传入命令在终端使用。
-- **USB 和 Wi-Fi**　界面支持刷新设备列表、选择设备和完成无线调试配对。
-- **可调播放设置**　桌面版支持 PCM 无损、Opus 192 kbps 和 Opus 96 kbps。音量可在转发中调节，音质和缓冲在开始转发前设置。
+<p align="center">Stream Android system audio to Desktop over ADB.</p>
 
-## 快速开始
+<p align="center">
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-### 1. 准备依赖
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#command-line">Command line</a> ·
+  <a href="#build-from-source">Build from source</a>
+</p>
 
-1. 将 `waverelay.exe` 放到一个文件夹。也可以在项目根目录运行下文的构建命令。
-2. 安装 Android SDK Platform-Tools，将 `platform-tools` 加到 `PATH`。在 PowerShell 中运行 `adb version` 确认能调用 ADB。[Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
-3. 在 EXE 所在文件夹或项目根目录运行以下命令，下载匹配的 Android 服务。WaveRelay 使用固定版本的服务协议。[scrcpy v3.3.4](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
+WaveRelay plays audio from an Android phone on the PC's default audio device. Android Debug Bridge (ADB) starts a temporary capture service on the phone, so setup requires neither root access nor a permanently installed Android app.
+
+## Features
+
+- **USB and Wi-Fi** — discover authorized devices and pair over Wi-Fi from the desktop interface.
+- **Adjustable audio** — choose lossless PCM or Opus at 96 or 192 kbps in the GUI. Set the target playback buffer before starting and adjust volume while streaming.
+- **Compact desktop interface** — a window that fits its content, with light and dark themes.
+- **One executable** — launch the GUI by double-clicking `waverelay.exe`, or pass a subcommand to use it from a terminal.
+
+## Quick start
+
+### Requirements
+
+- A Windows PC with Microsoft Edge WebView2 Runtime for the GUI. [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#windows)
+- A phone running Android 11 or later with USB debugging or wireless debugging enabled.
+- ADB from Android SDK Platform-Tools. Add `platform-tools` to `PATH` and check that `adb version` runs. [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+
+### 1. Prepare WaveRelay
+
+Place `waverelay.exe` in a folder or [build it from source](#build-from-source). In the folder containing the EXE, or at the repository root for a source build, download the matching Android service. The checksum check uses the expected SHA-256 for the scrcpy v3.3.4 server. [scrcpy v3.3.4 release](https://github.com/Genymobile/scrcpy/releases/tag/v3.3.4)
 
 ```powershell
+$server = '.local\scrcpy-server-v3.3.4'
+$expected = '8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e'
 New-Item -ItemType Directory -Force '.local' | Out-Null
-Invoke-WebRequest 'https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4' -OutFile '.local\scrcpy-server-v3.3.4'
-Get-FileHash '.local\scrcpy-server-v3.3.4' -Algorithm SHA256
+Invoke-WebRequest -Uri 'https://github.com/Genymobile/scrcpy/releases/download/v3.3.4/scrcpy-server-v3.3.4' -OutFile $server
+if ((Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash -ne $expected) {
+    throw 'scrcpy server checksum mismatch.'
+}
 ```
 
-服务文件的 SHA-256 为 `8588238c9a5a00aa542906b6ec7e6d5541d9ffb9b5d0f6e1bc0e365e2303079e`。Windows 桌面界面使用 Microsoft Edge WebView2 Runtime。[Tauri 系统要求](https://v2.tauri.app/start/prerequisites/)
+### 2. Connect and play
 
-### 2. 连接手机
+- **USB** — connect the phone, approve the debugging prompt on Android, and refresh the USB device list.
+- **Wi-Fi** — connect the phone and PC to the same local network. Open **网络连接** (Network) in WaveRelay. For first-time pairing, enter the address and six-digit code from Android's pairing dialog. To connect, use the address shown on the main **Wireless debugging** screen. The two ports are usually different. [Android wireless debugging](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi)
 
-- **USB**　开启手机的 USB 调试，插入数据线并在手机上确认授权。
-- **Wi-Fi**　让手机和电脑接入同一局域网，开启手机的无线调试。在 WaveRelay 的「网络连接」中，用配对弹窗显示的地址和六位码完成配对，再用无线调试主页显示的地址连接。两个端口通常不同。[Android 无线调试说明](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi)
+Select the device and click **开始转发** (Start streaming). Keep the phone unlocked when starting audio capture on Android 11. [scrcpy audio documentation](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md)
 
-Android 11 启动转发时请先解锁屏幕。[scrcpy 音频转发说明](https://github.com/Genymobile/scrcpy/blob/v3.3.4/doc/audio.md)
+## Command line
 
-### 3. 开始转发
-
-双击 `waverelay.exe` 打开界面。选择已授权的 Android 设备，按需调整音质和缓冲，再点击「开始转发」。缓冲值表示目标播放缓冲，实际延迟还受手机采集、传输和电脑音频系统影响。
-
-## 命令行
-
-在包含 EXE 和 `.local` 的文件夹中执行以下命令。若从项目根目录运行，请将 `.\waverelay.exe` 替换为 `.\target\release\waverelay.exe`。
+Run these commands from the folder containing the EXE and `.local`. From the repository root, use `.\target\release\waverelay.exe` in place of `.\waverelay.exe`. The network address below is an example.
 
 ```powershell
 .\waverelay.exe --help
 .\waverelay.exe gui
 .\waverelay.exe devices
 .\waverelay.exe play
-.\waverelay.exe play --serial '192.168.1.50:39111' --volume 75 --buffer-ms 100
+.\waverelay.exe play --serial '192.0.2.10:39111' --volume 75 --buffer-ms 100
 ```
 
-`play` 使用 PCM。多台设备在线时，用 `--serial` 指定 `devices` 列出的序列号。按 Ctrl+C 停止转发。ADB 路径可用 `--adb` 或 `WAVERELAY_ADB` 指定。服务文件路径可用 `play --server` 指定，GUI 使用 `WAVERELAY_SERVER`。
+- `play` streams PCM. When multiple devices are online, pass the serial shown by `devices` to `--serial`. Press Ctrl+C to stop.
+- `--buffer-ms` sets the target playback buffer in milliseconds. Capture, transport, and the audio device also contribute to end-to-end latency.
+- Use `--adb` or `WAVERELAY_ADB` to select an ADB executable. Override the Android service path with `play --server` for the CLI or `WAVERELAY_SERVER` for the GUI.
 
-## 从源码构建
+### Wi-Fi from the terminal
 
-安装 Rust stable、Visual Studio C++ 构建工具、Windows SDK 和 WebView2 Runtime，然后在项目根目录执行以下命令。[Rust 安装](https://rust-lang.org/tools/install/) · [Tauri Windows 构建要求](https://v2.tauri.app/start/prerequisites/#windows)
+For a first-time connection, use the pairing dialog address with `adb pair` and enter the six-digit code at the prompt. Then use the wireless debugging screen address with `adb connect`. Replace the example addresses with the ones shown on your phone.
 
 ```powershell
-cargo build --release --locked
-.\target\release\waverelay.exe
+adb pair 192.0.2.10:37099
+adb connect 192.0.2.10:39111
 ```
 
-Cargo 会生成 `target\release\waverelay.exe`。桌面界面、Rust 后端和命令行入口都包含在这个文件中。
+## Build from source
+
+On Windows, install stable Rust, the Visual Studio C++ build tools, the Windows SDK, and WebView2 Runtime. [Rust installation](https://rust-lang.org/tools/install/) · [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#windows)
+
+```powershell
+git clone https://github.com/MuRongPIG/WaveRelay.git
+Set-Location WaveRelay
+cargo build --release --locked
+```
+
+The build produces `target\release\waverelay.exe`. Prepare the Android service from the repository root as shown in [Quick start](#quick-start), then run `.\target\release\waverelay.exe`.
+
+Run the following checks from the repository root.
 
 ```powershell
 cargo fmt --check
 cargo test --locked
 ```
 
-## 项目结构
+## Project layout
 
-| 路径 | 用途 |
+| Path | Purpose |
 | --- | --- |
-| `src/main.rs` | GUI 与命令行的统一入口 |
-| `src/desktop.rs`、`src/ui/` | Tauri 窗口与桌面界面 |
-| `src/adb.rs`、`src/relay.rs` | Android 连接、服务启动与转发会话 |
-| `src/protocol.rs`、`src/audio.rs` | 音频数据解析、解码、缓冲与播放 |
+| [`src/main.rs`](src/main.rs) | Shared executable entry point for the GUI and CLI |
+| [`src/desktop.rs`](src/desktop.rs), [`src/ui/`](src/ui/) | Tauri window, desktop controls, and interface assets |
+| [`src/adb.rs`](src/adb.rs), [`src/relay.rs`](src/relay.rs) | Device discovery, Android service startup, and relay sessions |
+| [`src/protocol.rs`](src/protocol.rs), [`src/audio.rs`](src/audio.rs) | Stream framing, decoding, buffering, and playback |
 
-## 验证范围
+## Project status and feedback
 
-已在 Windows 上验证桌面启动、命令行入口，以及使用模拟设备进行无线配对、PCM 和 Opus 播放。Android 真机的 USB 和 Wi-Fi 转发仍待验证。
+The Windows GUI and CLI have been tested. Simulated-device tests cover wireless pairing and PCM/Opus playback. USB and Wi-Fi streaming with physical Android devices still need validation.
 
-## 第三方组件
+When filing a report, include your Windows version, Android version, USB or Wi-Fi connection mode, and steps to reproduce the issue. [GitHub Issues](https://github.com/MuRongPIG/WaveRelay/issues)
 
-Android 音频采集由 Genymobile 的 scrcpy 服务提供，适用 scrcpy 的 Apache-2.0 许可证。服务文件由使用者从上游下载。[scrcpy 许可证](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
+## Licensing and acknowledgments
+
+WaveRelay's source license is pending. The separately downloaded Android capture service comes from Genymobile's scrcpy and is licensed under Apache-2.0. [scrcpy license](https://github.com/Genymobile/scrcpy/blob/v3.3.4/LICENSE)
